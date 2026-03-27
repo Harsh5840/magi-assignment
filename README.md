@@ -4,11 +4,7 @@
 
 ---
 
-## Demo
 
-> Record a 2–3 min Loom showing: sidebar → type prompt → Generate → nodes appear live → toolbar edit → Export JSON.
-
----
 
 ## Quick Start
 
@@ -160,7 +156,7 @@ This keeps routes thin and makes it straightforward to swap LLM providers or par
 2. AI generation for social + blog: Complete.
 3. Structured rendering (including custom layout nodes): Complete.
 4. Reasonable architecture across frontend/backend/AI layer: Complete.
-5. Streaming progressive rendering: Complete for blog and landing page via SSE node streaming.
+5. Streaming progressive rendering: Complete for social posts, blog posts, and landing pages via SSE node streaming.
 6. Additional content type (landing page): Complete.
 7. Reference material as input context: Complete via optional sidebar reference block (text context).
 8. WYSIWYG fidelity: Implemented with styled TipTap surface and custom layout nodes.
@@ -178,7 +174,7 @@ The naive approach to streaming structured JSON is to wait for the full response
 The implementation here streams the model output and incrementally parses node objects from the `content` array using JSON brace-depth scanning (tracking strings/escapes so braces inside text don't break parsing). As soon as a complete top-level node object closes, it is sanitized and emitted to the client as `node_append`.
 
 This gives us:
-- Sub-second time-to-first-content on blog posts and landing pages
+- Sub-second time-to-first-content across social posts, blog posts, and landing pages
 - Progressive rendering even while later nodes are still being generated
 - Resilience to partial chunks and mid-sentence output
 
@@ -204,9 +200,9 @@ LLMs occasionally hallucinate node types that don't exist in our schema, or prod
 
 ## Key Design Decisions & Tradeoffs
 
-### 1. Social posts use full generation, not streaming
+### 1. Stream all content types (including social posts)
 
-Social posts are 150–300 words — the full generation takes ~2 seconds. Streaming this would add complexity (SSE connection setup, state machine) for minimal perceived benefit. More importantly, GPT-4o's JSON mode (`response_format: { type: "json_object" }`) produces significantly more reliable structured output than the streaming path, which relies on prompt instructions to format correctly. Worth the 2-second wait.
+All full-document generation paths now use SSE streaming, including social posts. This keeps UX behavior consistent across content types and gives immediate incremental rendering rather than waiting for the entire document. The stream parser and sanitizer still enforce schema safety before insertion into TipTap.
 
 ### 2. Custom TwoColumnLayout extension vs. CSS tricks
 
@@ -253,18 +249,4 @@ TipTap has a Y.js-based collaboration extension. The main changes needed:
 
 ---
 
-## What I'd Improve With More Time
 
-1. **Streaming JSON parser** — Replace the newline-heuristic approach with `@streamparser/json` for more robust partial-document handling. Lower error rate, handles GPT outputting nodes with internal newlines.
-
-2. **Optimistic UI** — Show a skeleton/shimmer in the editor while waiting for the first node (currently there's a small gap between "Generate" click and first content appearing).
-
-3. **Selection streaming refinement** — Selected-text iteration currently runs as a targeted non-streaming rewrite for predictable range replacement. A next step is streaming the replacement into the selected range with cursor-safe position mapping while users keep editing elsewhere.
-
-4. **Shared types package** — Move `types/index.ts` to a shared `packages/types` package in a Turborepo monorepo. One source of truth, TypeScript enforces the contract at build time.
-
-5. **Prompt versioning** — Store prompt versions in the database and A/B test them. Quality of generated content is directly tied to prompt quality; you want to iterate on prompts like you iterate on code.
-
-6. **Rate limiting + auth** — The `/api/generate` endpoint has no auth. For production, add JWT verification and per-user rate limiting (Redis + sliding window).
-
-7. **Document persistence** — Add a simple CRUD API (`/api/documents`) backed by PostgreSQL. The TipTap JSON is already serialisable — it just needs somewhere to live.
